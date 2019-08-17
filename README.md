@@ -48,8 +48,18 @@ output=json
 ```
 
 # Running The Script
+If you already have all the requirements set up, it can just be as simple as: 
+```
+python3 ./build.py 
+```
+The only requirement for the default installation to work is the IAM role "EKS-role" must exist.  
+If there is anything in the app-yaml file, the YAML scripts will be executed in the order of the directory listing, so prefix the files
+with a number is best (i.e. "1-persistent-volumes.yaml","2-mongo.yaml", "3-frontend.yaml")
+The default environment will create two (2) t2.large EC2 instances for the Kubernetes worker nodes.  
+Edit the aws-eks-kubernetes-worker-nodes.yaml file to adjust as needed.
 
-To create the AWS infrastructure and start everything up:
+
+For more custom installations, you can specify various argments on the CLI:
 ```
 export AGENTKEY=****************************
 python3 ./build.py --stackname tenable-eks-cs-demo-stack --stackyamlfile tenable-cs-eks-demo-vpc.yaml --eksrole EKS-role --wngyamlfile tenable-cs-eks-demo-nodegroup.yaml --agentkey $AGENTKEY --agentgroup "AWS EKS Worker Nodes" 

@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tiocsscanner
+  namespace: tiocsscanner
+  labels:
+    app: tiocsscanner
+spec:
+  selector:
+    app: tiocsscanner
+  type: ClusterIP
+  ports:
+  - name: http
+    protocol: TCP
+    port: 5000
+--- 
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata: 
+  labels: 
+    app: tiocsscanner
+  name: tiocsscanner
+  namespace: tiocsscanner
+spec: 
+  minReadySeconds: 10
+  replicas: 1
+  selector: 
+    matchLabels: 
+      app: tiocsscanner
+  strategy: 
+    rollingUpdate: 
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template: 
+    metadata: 
+      labels: 
+        app: tiocsscanner
+    spec: 
+      containers: 
+        - image: "tenableio-docker-consec-local.jfrog.io/cs-scanner:latest"
+          name: tiocsscanner
+          resources: 
+            limits:
+              cpu: "3"
+            requests: 
+              cpu: "1.5"
+              memory: "2Gi"
+          args:
+           - import-registry							
+          env:
+            - name: TENABLE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tiouser
+                  key: username
+            - name: TENABLE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tiopass
+                  key: password
+            - name: REGISTRY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: private-registry-user
+                  key: username
+            - name: REGISTRY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: private-registry-pass
+                  key: password
+            - name: DEBUG_MODE
+              value: "true"
+            - name: IMPORT_REPO_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: import-repo
+                  key: reponame
+            - name: REGISTRY_URI
+              valueFrom:
+                secretKeyRef:
+                  name: import-registry
+                  key: registry-uri
+            - name: IMPORT_INTERVAL_MINUTES
+              value: "5"	
+      imagePullSecrets: 
+      - name: regcred

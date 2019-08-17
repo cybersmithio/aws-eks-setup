@@ -123,8 +123,12 @@ def installNessusAgent(DEBUG,sshprivatekey,agentkey,agentgroup,ipaddrs):
 
         if retval <= 1:
             #Link the agent
-            command="ssh -o StrictHostKeyChecking=no -i "+str(sshprivatekey)+" ec2-user@"+str(ipaddress)+ \
-                    " sudo /opt/nessus_agent/sbin/nessuscli agent link --key="+str(agentkey)+" --cloud --groups=\\'"+str(agentgroup)+"\\'"
+            if agentgroup == None:
+                command = "ssh -o StrictHostKeyChecking=no -i " + str(sshprivatekey) + " ec2-user@" + str(ipaddress) + \
+                          " sudo /opt/nessus_agent/sbin/nessuscli agent link --key=" + str(agentkey) + " --cloud"
+            else:
+                command="ssh -o StrictHostKeyChecking=no -i "+str(sshprivatekey)+" ec2-user@"+str(ipaddress)+ \
+                        " sudo /opt/nessus_agent/sbin/nessuscli agent link --key="+str(agentkey)+" --cloud --groups=\\'"+str(agentgroup)+"\\'"
             print("Command:"+command)
             try:
                 output=subprocess.check_output(command,shell=True)
@@ -365,14 +369,14 @@ def mkdirs(DEBUG,homedir):
 parser = argparse.ArgumentParser(description="Creates EKS environment to demonstration Tenable Container Security")
 parser.add_argument('--debug',help="Display a **LOT** of information",action="store_true")
 parser.add_argument('--eksrole', help="The name of the EKS role used in the EKS cluster",nargs=1,action="store",default=["EKS-role"])
-parser.add_argument('--stackname', help="The name of the stack ",nargs=1,action="store",default=["tenable-eks-cs-demo-stack"])
-parser.add_argument('--stackyamlfile', help="The YAML file defining the stack ",nargs=1,action="store",default=[None])
-parser.add_argument('--eksclustername', help="The name of the EKS cluster",nargs=1,action="store",default=["tenable-eks-cs-demo-eks-cluster"])
-parser.add_argument('--namespace', help="The Kubernetes namespace into which all the objects will be deployed",nargs=1,action="store",default=["tenable-eks-cs-demo"])
+parser.add_argument('--stackname', help="The name of the stack ",nargs=1,action="store",default=["aws-eks-stack"])
+parser.add_argument('--stackyamlfile', help="The YAML file defining the stack ",nargs=1,action="store",default=["aws-eks-vpc.yaml"])
+parser.add_argument('--eksclustername', help="The name of the EKS cluster",nargs=1,action="store",default=["aws-eks-cluster"])
+parser.add_argument('--namespace', help="The Kubernetes namespace into which all the objects will be deployed",nargs=1,action="store",default=["default"])
 parser.add_argument('--wngstackname', help="The name of the worker node group stack",nargs=1,action="store",default=["tenable-eks-cs-demo-worker-nodes"])
-parser.add_argument('--wngname', help="The name of the worker node group",nargs=1,action="store",default=["tenable-eks-cs-demo-worker-nodegroup"])
-parser.add_argument('--wngyamlfile', help="The YAML file defining the workernodegroup ",nargs=1,action="store",default=[None])
-parser.add_argument('--ec2keypairname', help="The name of the EC2 keypair to use for SSH worker node communication ",nargs=1,action="store",default=["tenable-eks-demo-cs-keypair"])
+parser.add_argument('--wngname', help="The name of the worker node group",nargs=1,action="store",default=["aws-eks-k8s-worker-nodegroup"])
+parser.add_argument('--wngyamlfile', help="The YAML file defining the workernodegroup ",nargs=1,action="store",default=["aws-eks-kubernetes-worker-nodes.yaml"])
+parser.add_argument('--ec2keypairname', help="The name of the EC2 keypair to use for SSH worker node communication ",nargs=1,action="store",default=["aws-eks-k8s-ec2-keypair"])
 parser.add_argument('--sshprivatekey', help="The file name of the SSH private key on your system",nargs=1,action="store",default=[None])
 parser.add_argument('--agentkey', help="The Tenable.io agent linking key ",nargs=1,action="store",default=[None])
 parser.add_argument('--agentgroup', help="The Tenable.io agent group for the agents ",nargs=1,action="store",default=[None])
@@ -435,9 +439,9 @@ if args.existingapps:
         print("No existing Kubernetes apps found.")
     exit(0)
 
-
+#Because python doesn't interpret tilde (~) for the home directory, we have to figure out the full path here.
 if args.sshprivatekey[0] == None:
-    args.sshprivatekey[0]=HOMEDIR+"/.ssh/tenable-eks-cs-demo-keypair.pem"
+    args.sshprivatekey[0]=HOMEDIR+"/.ssh/aws-eks-k8s-ec2-keypair.pem"
 
 
 #Check that all necessary parameters are given
@@ -461,11 +465,9 @@ if args.only[0] == None or args.only[0]=="nodegroup":
 
 if args.only[0] == None or args.only[0]=="agents":
     if args.agentkey[0] == None:
-        print("Need Tenable.io Agent linking key to install Nessus agents")
-        exit(-1)
+        print("No Tenable.io Agent linking key provided, so a Nessus agent will not be installed")
     if args.agentgroup[0] == None:
-        print("Need Tenable.io Agent group key to install Nessus agents")
-        exit(-1)
+        print("No Tenable.io Agent group provided, so this will just be installed without adding to a group.")
 
 
 #Execute steps
@@ -537,21 +539,17 @@ ipaddrs=listEC2InstanceIPaddresses(DEBUG,ec2,args.eksclustername[0],args.wngname
 
 
 if args.only[0] == None or args.only[0]=="agents":
-    print("Installing Nessus Agents")
-    installNessusAgent(DEBUG,args.sshprivatekey[0],args.agentkey[0],args.agentgroup[0],ipaddrs)
+    if args.agentkey[0] != None:
+        print("Installing Nessus Agents")
+        installNessusAgent(DEBUG,args.sshprivatekey[0],args.agentkey[0],args.agentgroup[0],ipaddrs)
     if args.only[0] == "agents":
         exit(0)
 
 if args.only[0] == None or args.only[0]=="apps":
-    print("Deploying Guestbook app and Redis backend")
-    deployGuestbook(DEBUG,namespace=namespace)
-    while displayPublicURLs(DEBUG,ec2) == False:
-        print("No public URLs available yet...waiting 30 seconds")
-        time.sleep(30)
+    print("Deploying application YAMLs")
+    for i in os.listdir("app-yaml"):
+        print("Deploying YAML file",i)
     if args.only[0] == "apps":
         exit(0)
-
-if args.only[0] == None or args.only[0]=="display":
-    displayPublicURLs(DEBUG,ec2)
 
 exit(0)
